@@ -26,20 +26,4 @@ func TestV2(t *testing.T) {
 	dest, err := link.PickDestination(req)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://golang.com/", dest.URL)
-
-	// -- What is our IP?
-	// -- What is our device's brand?
-	// -- What is our country?
-	// -- What is our browser?
-	// -- What is our OS?
-	// ... language, time of the request, etc.
-	// 302 Location: fullURL
 }
-
-// func TestSimpleRedirection(t *testing.T) {
-// 	store := data.NewInmemLinkStore()
-
-// 	got, err := store.GetLinkByShort("go")
-// 	assert.NoError(t, err)
-// 	assert.Equal(t, "https://go.dev/", got.FullURL)
-// }
