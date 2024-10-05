@@ -13,18 +13,20 @@ var newShort, _ = nanoid.CustomASCII("0123456789abcdefghijklmnopqrstuvwxyzABCDEF
 
 func NewLink(full string) Link {
 	return Link{
-		ID:           newId(),
-		Short:        newShort(),
-		Destinations: []Destination{},
-		Active:       true,
+		ID:                 newId(),
+		Short:              newShort(),
+		Destinations:       []Destination{},
+		DefaultDestination: Destination{},
+		Active:             true,
 	}
 }
 
 type Link struct {
-	ID           string
-	Short        string
-	Destinations []Destination
-	Active       bool
+	ID                 string
+	Short              string
+	Destinations       []Destination
+	DefaultDestination Destination
+	Active             bool
 }
 
 func (l *Link) SortDestinations() {
@@ -36,9 +38,15 @@ func (l *Link) SortDestinations() {
 func (l *Link) PickDestination(req Request) (*Destination, error) {
 	l.SortDestinations()
 	for _, d := range l.Destinations {
-		if d.Condition.IsSatisfied(req) {
-			return &d, nil
+		if d.Condition != nil {
+			if d.Condition.IsSatisfied(req) {
+				return &d, nil
+			}
 		}
+	}
+
+	if l.DefaultDestination.URL != "" {
+		return &l.DefaultDestination, nil
 	}
 
 	return nil, fmt.Errorf("no destination found")

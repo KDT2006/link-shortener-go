@@ -13,18 +13,14 @@ func NewInmemLinkStore() LinkStorer {
 	l1 := NewLink("https://go.dev")
 	l1.ID = "1"
 	l1.Short = "go"
-	l1.Destinations = []Destination{
-		NewDestination("https://golang-chrome.com/", NewBrowserIn("chrome"), 1),
-		NewDestination("https://golang.com/", NewCountryEquals("US"), 10),
-		NewDestination("https://golang.fr/", NewCountryEquals("FR"), 1),
-		NewDestination("https://golang.in/", NewCountryEquals("IN"), 1),
-	}
+	l1.DefaultDestination = NewDestination("https://golang.com/", nil, 0)
 
 	l2 := NewLink("https://google.com/")
 	l2.Short = "google"
 	l2.Destinations = []Destination{
 		NewDestination("https://google.com/", NewCountryEquals("US"), 1),
 		NewDestination("https://google.co.in/", NewCountryEquals("IN"), 1),
+		NewDestination("https://appleNotFound.com/", NewBrowserIn("Safari"), 2),
 	}
 
 	l3 := NewLink("https://example.com/")
