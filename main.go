@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/mostafa-asg/ip2country"
@@ -30,41 +29,105 @@ func detectBrowser(userAgent string) string {
 }
 
 type BodyLink struct {
-	Address string
-	Short   string
+	Address      string            `json:"address"`
+	Short        string            `json:"short"`
+	Destinations []BodyDestination `json:"destinations"`
+}
 
-	// format: [ [ <Address>, <Condition>, <Priority> ].. ]
-	Destinations [][]string
+type BodyDestination struct {
+	Address string `json:"address"`
+	// Used for parsing of raw bytes into json without specific type
+	Condition json.RawMessage `json:"condition"`
+	Priority  int             `json:"priority"`
+}
+
+func parseCondition(condRaw json.RawMessage) (data.Conditioner, error) {
+	var condMap map[string]interface{}
+	if err := json.Unmarshal(condRaw, &condMap); err != nil {
+		return nil, fmt.Errorf("invalid condition format: %v", err)
+	}
+
+	condType, ok := condMap["type"].(string)
+	if !ok {
+		return nil, fmt.Errorf("condition type not specified")
+	}
+
+	switch condType {
+	case "AND":
+		return parseAndCondition(condMap)
+	case "CountryEquals":
+		return parseCountryEqualsCondition(condMap)
+	case "BrowserIn":
+		return parseBrowserInCondition(condMap)
+	default:
+		return nil, fmt.Errorf("unknown condition type: %s", condType)
+	}
+}
+
+func parseAndCondition(condMap map[string]interface{}) (data.Conditioner, error) {
+	childrenRaw, ok := condMap["children"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid AND condition format")
+	}
+
+	var children []data.Conditioner
+	for _, childRaw := range childrenRaw {
+		childJSON, err := json.Marshal(childRaw)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling child condition: %v", err)
+		}
+
+		child, err := parseCondition(childJSON)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing child condition: %v", err)
+		}
+
+		children = append(children, child)
+	}
+
+	return data.NewAnd(children...), nil
+}
+
+func parseCountryEqualsCondition(condMap map[string]interface{}) (data.Conditioner, error) {
+	country, ok := condMap["country"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid CountryEquals condition format")
+	}
+
+	return data.NewCountryEquals(country), nil
+}
+
+func parseBrowserInCondition(condMap map[string]interface{}) (data.Conditioner, error) {
+	browsersRaw, ok := condMap["browsers"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid BrowserIn condition format")
+	}
+
+	browsers := make([]string, len(browsersRaw))
+	for i, b := range browsersRaw {
+		browsers[i], ok = b.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid browser type in BrowserIn condition")
+		}
+	}
+
+	return data.NewBrowserIn(browsers...), nil
 }
 
 func createLink(l BodyLink) (*data.Link, error) {
-	temp := data.NewLink(l.Address)
-	temp.Short = l.Short
-	tempDestinations := []data.Destination{}
-	for _, destination := range l.Destinations {
-		if strings.Contains(destination[1], "NewCountryEquals") {
-			country := strings.Split(destination[1], ":")[1]
-			parsedPriority, err := strconv.ParseInt(destination[2], 10, 64)
-			if err != nil {
-				fmt.Printf("Error parsing priority as int: %s\n", err)
-				return nil, err
-			}
-			newDestination := data.NewDestination(destination[0], data.NewCountryEquals(country), int(parsedPriority))
-			tempDestinations = append(tempDestinations, newDestination)
-		} else if strings.Contains(destination[1], "NewBrowserIn") {
-			browsers := strings.Split(destination[1], " ")[1:]
-			parsedPriority, err := strconv.ParseInt(destination[2], 10, 64)
-			if err != nil {
-				fmt.Printf("Error parsing priority as int: %s\n", err)
-				return nil, err
-			}
-			newDestination := data.NewDestination(destination[0], data.NewBrowserIn(browsers...), int(parsedPriority))
-			tempDestinations = append(tempDestinations, newDestination)
-		}
-	}
-	temp.Destinations = tempDestinations
+	link := data.NewLink(l.Address)
+	link.Short = l.Short
 
-	return &temp, nil
+	for _, dest := range l.Destinations {
+		condition, err := parseCondition(dest.Condition)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing condition for destination %s: %v", dest.Address, err)
+		}
+
+		link.Destinations = append(link.Destinations, data.NewDestination(dest.Address, condition, dest.Priority))
+	}
+
+	return &link, nil
 }
 
 func ReadUserIP(r *http.Request) string {
@@ -148,9 +211,27 @@ func main() {
 			return
 		}
 
-		store.SaveLink(*link)
+		err = store.SaveLink(*link)
+		if err != nil {
+			http.Error(w, "Failed to save link", http.StatusInternalServerError)
+			return
+		}
 
 		fmt.Printf("Link: %+v\n", link)
+
+		response := struct {
+			ShortURL string `json:"short_url"`
+			Message  string `json:"message"`
+		}{
+			ShortURL: link.Short,
+			Message:  "Link created",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 	})
 
 	// TODO(maybe): Feature to update links
@@ -161,7 +242,7 @@ func main() {
 		fmt.Printf("Delete request for the short: %s\n", short)
 
 		// Delete the link
-		link, err := store.DeactivateLinkByShort(short)
+		link, err := store.ToggleLinkByShort(short)
 		if err != nil {
 			fmt.Printf("Error deleting link by short: %s\n", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)

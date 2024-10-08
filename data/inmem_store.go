@@ -49,12 +49,12 @@ func (store *inmemLinkStore) GetLinkByShort(short string) (*Link, error) {
 	return nil, fmt.Errorf("link '%s' not found by short", short)
 }
 
-func (store *inmemLinkStore) DeactivateLinkByShort(short string) (*Link, error) {
+func (store *inmemLinkStore) ToggleLinkByShort(short string) (*Link, error) {
 	short = strings.Trim(short, "/")
 
 	for i, l := range store.data {
 		if l.Short == short {
-			store.data[i].Active = false
+			store.data[i].Active = !store.data[i].Active
 			return &store.data[i], nil
 		}
 	}
