@@ -10,33 +10,7 @@ type inmemLinkStore struct {
 }
 
 func NewInmemLinkStore() LinkStorer {
-	l1 := NewLink("https://go.dev")
-	l1.ID = "1"
-	l1.Short = "go"
-	l1.DefaultDestination = NewDestination("https://golang.com/", nil, 0)
-
-	l2 := NewLink("https://google.com/")
-	l2.Short = "google"
-	l2.Destinations = []Destination{
-		NewDestination("https://google.com/", NewCountryEquals("US"), 1),
-		NewDestination("https://google.co.in/", NewCountryEquals("IN"), 1),
-		NewDestination("https://appleNotFound.com/", NewBrowserIn("Safari"), 2),
-	}
-
-	l3 := NewLink("https://example.com/")
-	l3.Short = "example"
-	l3.Destinations = []Destination{
-		NewDestination("https://example.com/", NewCountryEquals("US"), 1),
-		NewDestination("https://example.in/", NewCountryEquals("IN"), 1),
-	}
-
-	return &inmemLinkStore{
-		data: []Link{
-			l1,
-			l2,
-			l3,
-		},
-	}
+	return &inmemLinkStore{}
 }
 
 func (store *inmemLinkStore) SaveLink(link Link) error {
@@ -66,7 +40,22 @@ func (store *inmemLinkStore) GetLinkByShort(short string) (*Link, error) {
 
 	for _, l := range store.data {
 		if l.Short == short {
-			return &l, nil
+			if l.Active {
+				return &l, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("link '%s' not found by short", short)
+}
+
+func (store *inmemLinkStore) DeactivateLinkByShort(short string) (*Link, error) {
+	short = strings.Trim(short, "/")
+
+	for i, l := range store.data {
+		if l.Short == short {
+			store.data[i].Active = false
+			return &store.data[i], nil
 		}
 	}
 

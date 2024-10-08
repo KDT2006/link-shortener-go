@@ -87,4 +87,5 @@ type LinkStorer interface {
 	SaveLink(link Link) error
 	GetLinkByID(id string) (*Link, error)
 	GetLinkByShort(short string) (*Link, error)
+	DeactivateLinkByShort(short string) (*Link, error)
 }
