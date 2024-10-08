@@ -55,6 +55,8 @@ func parseCondition(condRaw json.RawMessage) (data.Conditioner, error) {
 	switch condType {
 	case "AND":
 		return parseAndCondition(condMap)
+	case "OR":
+		return parseOrCondition(condMap)
 	case "CountryEquals":
 		return parseCountryEqualsCondition(condMap)
 	case "BrowserIn":
@@ -86,6 +88,30 @@ func parseAndCondition(condMap map[string]interface{}) (data.Conditioner, error)
 	}
 
 	return data.NewAnd(children...), nil
+}
+
+func parseOrCondition(condMap map[string]interface{}) (data.Conditioner, error) {
+	childrenRaw, ok := condMap["children"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid OR condition format")
+	}
+
+	var children []data.Conditioner
+	for _, childRaw := range childrenRaw {
+		childJSON, err := json.Marshal(childRaw)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling child condition: %v", err)
+		}
+
+		child, err := parseCondition(childJSON)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing child condition: %v", err)
+		}
+
+		children = append(children, child)
+	}
+
+	return data.NewOr(children...), nil
 }
 
 func parseCountryEqualsCondition(condMap map[string]interface{}) (data.Conditioner, error) {
@@ -162,6 +188,15 @@ func main() {
 
 	// Setup the IP-Country package
 	ip2country.Load("./data/IP2COUNTRY.CSV")
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		links := store.GetAllLinks()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(links); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
+	})
 
 	mux.HandleFunc("/{short}", func(w http.ResponseWriter, r *http.Request) {
 		short := r.PathValue("short")

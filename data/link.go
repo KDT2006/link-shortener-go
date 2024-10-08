@@ -85,6 +85,7 @@ func NewRequest(ip, country string) Request {
 
 type LinkStorer interface {
 	SaveLink(link Link) error
+	GetAllLinks() []Link
 	GetLinkByID(id string) (*Link, error)
 	GetLinkByShort(short string) (*Link, error)
 	// TODO(maybe) UpdateLinkByShort(short string) (*Link, error)

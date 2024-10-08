@@ -25,6 +25,10 @@ func (store *inmemLinkStore) SaveLink(link Link) error {
 	return nil
 }
 
+func (store *inmemLinkStore) GetAllLinks() []Link {
+	return store.data
+}
+
 func (store *inmemLinkStore) GetLinkByID(id string) (*Link, error) {
 	for _, l := range store.data {
 		if l.ID == id {
